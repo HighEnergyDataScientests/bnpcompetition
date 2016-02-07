@@ -13,11 +13,19 @@ from sklearn.cross_validation import train_test_split
 import matplotlib
 matplotlib.use("Agg") #Needed to save figures
 import matplotlib.pyplot as plt
+import time
 
 #seed = 260681
 
-def ceate_feature_map(features):
-    outfile = open('xgb.fmap', 'w')
+### Controlling Parameters
+output_col_name = "target"
+test_col_name = "PredictedProb"
+enable_feature_analysis = 1
+id_col_name = "ID"
+
+
+def ceate_feature_map(features,featureMapFile):
+    outfile = open(featureMapFile, 'w')
     for i, feat in enumerate(features):
         outfile.write('{0}\t{1}\tq\n'.format(i, feat))
     outfile.close()
@@ -28,28 +36,7 @@ test = pd.read_csv('../inputs/test.csv')
 
 
 print("## Data Processing")
-y = train.QuoteConversion_Flag.values
-train = train.drop('QuoteNumber', axis=1)
-#test = test.drop('QuoteNumber', axis=1)
-
-# Lets play with some dates
-train['Date'] = pd.to_datetime(pd.Series(train['Original_Quote_Date']))
-train = train.drop('Original_Quote_Date', axis=1)
-
-test['Date'] = pd.to_datetime(pd.Series(test['Original_Quote_Date']))
-test = test.drop('Original_Quote_Date', axis=1)
-
-train['Year'] = train['Date'].apply(lambda x: int(str(x)[:4]))
-train['Month'] = train['Date'].apply(lambda x: int(str(x)[5:7]))
-train['weekday'] = train['Date'].dt.dayofweek
-
-
-test['Year'] = test['Date'].apply(lambda x: int(str(x)[:4]))
-test['Month'] = test['Date'].apply(lambda x: int(str(x)[5:7]))
-test['weekday'] = test['Date'].dt.dayofweek
-
-train = train.drop('Date', axis=1)
-test = test.drop('Date', axis=1)
+train = train.drop(id_col_name, axis=1)
 
 train = train.fillna(-1)
 test = test.fillna(-1)
@@ -63,11 +50,9 @@ for f in train.columns:
         train[f] = lbl.transform(list(train[f].values))
         test[f] = lbl.transform(list(test[f].values))
 
-features = [s for s in train.columns.ravel().tolist() if s != 'QuoteConversion_Flag']
+features = [s for s in train.columns.ravel().tolist() if s != output_col_name]
 print("Features: ", features)
-#for f in sorted(set(features)):
-#    print f
-#exit()
+
 
 print("## Training")
 params = {"objective": "binary:logistic",
@@ -76,16 +61,17 @@ params = {"objective": "binary:logistic",
           "max_depth": 10,
           "subsample": 0.8,
           "colsample_bytree": 0.8,
-          "eval_metric": "auc",
+          "eval_metric": "logloss",
           "silent": 1,
           "seed": 1301
           }
 num_boost_round = 500
 
 print("Train a XGBoost model")
-X_train, X_valid = train_test_split(train, test_size=0.01)
-y_train = X_train['QuoteConversion_Flag']
-y_valid = X_valid['QuoteConversion_Flag']
+timestr = time.strftime("%Y%m%d-%H%M%S")
+X_train, X_valid = train_test_split(train, test_size=0.1)
+y_train = X_train[output_col_name]
+y_valid = X_valid[output_col_name]
 dtrain = xgb.DMatrix(X_train[features], y_train)
 dvalid = xgb.DMatrix(X_valid[features], y_valid)
 
@@ -93,22 +79,24 @@ watchlist = [(dtrain, 'train'),(dvalid, 'eval')]
 gbm = xgb.train(params, dtrain, num_boost_round, evals=watchlist, maximize=True, early_stopping_rounds=100, verbose_eval=True)
 
 
-print("## Creating Feature Importance Map")
-ceate_feature_map(features)
-importance = gbm.get_fscore(fmap='xgb.fmap')
-importance = sorted(importance.items(), key=operator.itemgetter(1))
+if enable_feature_analysis == 1:
+    print("## Creating Feature Importance Map")
+    featureMapFile = '../feature_analysis/xgb_' + timestr +'.fmap'
+    ceate_feature_map(features,featureMapFile)
+    importance = gbm.get_fscore(fmap=featureMapFile)
+    importance = sorted(importance.items(), key=operator.itemgetter(1))
 
-df = pd.DataFrame(importance, columns=['feature', 'fscore'])
-df['fscore'] = df['fscore'] / df['fscore'].sum()
+    df = pd.DataFrame(importance, columns=['feature', 'fscore'])
+    df['fscore'] = df['fscore'] / df['fscore'].sum()
 
-featp = df.plot(kind='barh', x='feature', y='fscore', legend=False, figsize=(6, 10))
-plt.title('XGBoost Feature Importance')
-plt.xlabel('relative importance')
-fig_featp = featp.get_figure()
-fig_featp.savefig('feature_importance_xgb.png',bbox_inches='tight',pad_inches=1)
-df.to_csv("feature_importance.csv")
+    featp = df.plot(kind='barh', x='feature', y='fscore', legend=False, figsize=(10, 12))
+    plt.title('XGBoost Feature Importance')
+    plt.xlabel('relative importance')
+    fig_featp = featp.get_figure()
+    fig_featp.savefig('../feature_analysis/feature_importance_xgb_' + timestr + '.png',bbox_inches='tight',pad_inches=1)
+    df.to_csv('../feature_analysis/feature_importance_xgb_' + timestr + '.csv')
 
 print("## Predicting test data")
 preds = gbm.predict(xgb.DMatrix(test[features]),ntree_limit=gbm.best_ntree_limit)
-test["QuoteConversion_Flag"] = preds
-test[['QuoteNumber',"QuoteConversion_Flag"]].to_csv('test_predictions.csv', index=False)
+test[test_col_name] = preds
+test[[id_col_name,test_col_name]].to_csv("../predictions/pred_" + timestr + ".csv", index=False)
