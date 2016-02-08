@@ -8,8 +8,11 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import operator
+
 from sklearn import preprocessing
 from sklearn.cross_validation import train_test_split
+from sklearn.preprocessing import Imputer
+
 import matplotlib
 matplotlib.use("Agg") #Needed to save figures
 import matplotlib.pyplot as plt
@@ -22,6 +25,7 @@ output_col_name = "target"
 test_col_name = "PredictedProb"
 enable_feature_analysis = 1
 id_col_name = "ID"
+num_iterations = 5
 
 
 def ceate_feature_map(features,featureMapFile):
@@ -97,8 +101,8 @@ else:
 print("## Data Processing")
 train = train.drop(id_col_name, axis=1)
 
-train = train.fillna(-1)
-test = test.fillna(-1)
+#train = train.fillna(-1)
+#test = test.fillna(-1)
 
 print("## Data Encoding")
 for f in train.columns:
@@ -112,6 +116,11 @@ for f in train.columns:
 features = [s for s in train.columns.ravel().tolist() if s != output_col_name]
 print("Features: ", features)
 
+imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
+imp.fit(train[features])
+train[features] = imp.transform(train[features])
+test[features] = imp.transform(test[features])
+
 
 print("## Training")
 numPos = len(train[train[output_col_name] == 1])
@@ -120,17 +129,19 @@ scaleRatio = float(numNeg) / float(numPos)
 print("Number of postive " + str(numPos) + " , Number of negative " + str(numNeg) + " , Ratio Negative to Postive : " , str(scaleRatio))
 
 
+
 params = {"objective": "binary:logistic",
-          "eta": 0.3,
-          "nthread":-1,
-          "max_depth": 10,
-          "subsample": 0.8,
-          "colsample_bytree": 0.8,
+          "eta": 0.03,
+          "nthread":3,
+          "max_depth": 6,
+          "subsample": 0.67,
+          "colsample_bytree": 0.9,
           "eval_metric": "logloss",
+          "n_estimators": 100,
           "silent": 1,
           "seed": 93425
           }
-num_boost_round = 500
+num_boost_round = 5000
 test_size = 0.1
 train_model(features,params,num_boost_round,test_size)
 
