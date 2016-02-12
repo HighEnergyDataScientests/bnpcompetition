@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use("Agg") #Needed to save figures
 import time
 import os
-#import math
+import sklearn.metrics
 
 # Logistic Regression
 from sklearn.linear_model import LogisticRegression
@@ -26,7 +26,7 @@ test_col_name = "PredictedProb"
 enable_feature_analysis = 1
 id_col_name = "ID"
 num_iterations = 5
-test_size = 0.1
+test_size = 0.9
 
 # load the datasets
 print("## Loading Data")
@@ -88,12 +88,16 @@ timestr = time.strftime("%Y%m%d-%H%M%S")
 # make predictions
 print("## Making Predictions")
 
-p = model.predict_proba(test)
-p_log = model.predict_log_proba(test)
+p_train = model.predict(X_train)
+p_valid = model.predict(X_valid)
 
-#loglosss = -sum(y_train*p_log[:,1] + (1.0 - y_train)*math.log10(1.0 - p[:,1]))
-print("Score = ", p_log)
+score_train = sklearn.metrics.log_loss(y_train, p_train)
+score_valid = sklearn.metrics.log_loss(y_valid, p_valid)
+print("Score based on training data set = ", score_train)
+print("Score based on validating data set = ", score_valid)
+
+p_test = model.predict(test)
 
 # Producing output of predicted probabilities and writing it into a file
-test[test_col_name] = p[:,1]
+test[test_col_name] = p_test
 test[[id_col_name,test_col_name]].to_csv("../predictions/pred_logreg_" + timestr + ".csv", index=False)
