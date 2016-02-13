@@ -26,7 +26,7 @@ test_col_name = "PredictedProb"
 enable_feature_analysis = 1
 id_col_name = "ID"
 num_iterations = 5
-test_size = 0.9
+test_size = 0.05
 
 # load the datasets
 print("## Loading Data")
@@ -62,6 +62,10 @@ imp.fit(train[features])
 train[features] = imp.transform(train[features])
 test[features] = imp.transform(test[features])
 
+# creating temp_test array to use to compute predictions with test data set
+temp_test = test
+temp_test = temp_test.drop(id_col_name, axis=1)
+
 # encoding test data set
 X_pos = train[train[output_col_name] == 1]
 X_neg = train[train[output_col_name] == 0]
@@ -78,26 +82,29 @@ X_valid = X_valid.iloc[np.random.permutation(len(X_valid))]
 y_train = X_train[output_col_name]
 y_valid = X_valid[output_col_name]
 
+# deleting first column, which corresponds to output y, from both data sets
+X_train = X_train.drop(output_col_name, axis=1)
+X_valid = X_valid.drop(output_col_name, axis=1)
 
 # fit a logistic regression model to the data
 print("## Training")
-model = LogisticRegression()
+model = LogisticRegression(C = 100.0)
 model.fit(X_train, y_train)
 timestr = time.strftime("%Y%m%d-%H%M%S")
 
 # make predictions
 print("## Making Predictions")
+p_train = model.predict_proba(X_train)
+p_valid = model.predict_proba(X_valid)
 
-p_train = model.predict(X_train)
-p_valid = model.predict(X_valid)
-
-score_train = sklearn.metrics.log_loss(y_train, p_train)
-score_valid = sklearn.metrics.log_loss(y_valid, p_valid)
+score_train = sklearn.metrics.log_loss(y_train, p_train[:,1])
+score_valid = sklearn.metrics.log_loss(y_valid, p_valid[:,1])
 print("Score based on training data set = ", score_train)
 print("Score based on validating data set = ", score_valid)
 
-p_test = model.predict(test)
+# make predictions on test data set
+p_test = model.predict_proba(temp_test)
 
 # Producing output of predicted probabilities and writing it into a file
-test[test_col_name] = p_test
+test[test_col_name] = p_test[:,1]
 test[[id_col_name,test_col_name]].to_csv("../predictions/pred_logreg_" + timestr + ".csv", index=False)
