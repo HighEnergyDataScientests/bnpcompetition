@@ -7,6 +7,12 @@
 Create scatterplots between pairs of features
 """
 
+def blah(hi):
+    """
+
+    :param hi:
+    :return:
+    """
 
 import pandas as pd
 import numpy as np
@@ -15,7 +21,9 @@ import operator
 from sklearn import preprocessing
 from sklearn.cross_validation import train_test_split
 import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+matplotlib.style.use('ggplot')
 import itertools as it
 import seaborn as sb
 
@@ -52,8 +60,11 @@ print("## Creating plots")
 # fig = sb.pairplot(num_df, hue=output_col_name)
 # fig.savefig('plots_pairwise/matrix.png')
 
+# Try for a subset of train:
+train_subset = train_test_split(train, test_size=0.1)
+
 for cat_f in cat_feat:
     for num_f in num_feat:
-        swm_plt = sb.swarmplot(x=cat_f, y=num_f, hue=output_col_name, data=train)
+        swm_plt = sb.swarmplot(x=cat_f, y=num_f, hue=output_col_name, data=train_subset)
         swm_plt.savefig('plots_pairwise/' + cat_f + '_' + num_f + '.png')
 
