@@ -82,7 +82,7 @@ for f in features:
         feat_counts_df['sum'] = feat_counts_df.sum(axis=1)
         feat_counts_df['pos_pct'] = feat_counts_df['pos']/feat_counts_df['sum']
 
-        feat_counts_df.to_csv('missing_data_analysis/stats/' + f + '.csv')
+        feat_counts_df.to_csv('../feature_analysis/missing_data_analysis/stats/' + f + '.csv')
 
 
     else: # draw histograms
@@ -96,4 +96,4 @@ for f in features:
 
         plt.legend()
 
-        plt.savefig('missing_data_analysis/' + f + '.png')
+        plt.savefig('../feature_analysis/missing_data_analysis/' + f + '.png')

@@ -7,13 +7,6 @@
 Create scatterplots between pairs of features
 """
 
-def blah(hi):
-    """
-
-    :param hi:
-    :return:
-    """
-
 import pandas as pd
 import numpy as np
 import xgboost as xgb
@@ -66,5 +59,5 @@ train_subset = train_test_split(train, test_size=0.1)
 for cat_f in cat_feat:
     for num_f in num_feat:
         swm_plt = sb.swarmplot(x=cat_f, y=num_f, hue=output_col_name, data=train_subset)
-        swm_plt.savefig('plots_pairwise/' + cat_f + '_' + num_f + '.png')
+        swm_plt.savefig('../feature_analysis/plots_pairwise/' + cat_f + '_' + num_f + '.png')
 
