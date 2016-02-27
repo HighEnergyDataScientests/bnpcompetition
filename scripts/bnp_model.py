@@ -36,6 +36,16 @@ num_of_trial_comb = 3
 exhaustive_grid_search = 0
 
 
+### Creating output folders
+if not os.path.isdir("../predictions"):
+    os.mkdir("../predictions")
+
+if not os.path.isdir("../intermediate_data"):
+    os.mkdir("../intermediate_data")
+
+if not os.path.isdir("../saved_states"):
+    os.mkdir("../saved_states")
+
 def ceate_feature_map(features,featureMapFile):
     outfile = open(featureMapFile, 'w')
     for i, feat in enumerate(features):
