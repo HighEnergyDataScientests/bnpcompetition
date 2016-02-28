@@ -38,7 +38,7 @@ print("## Calculating matrices")
 
 print("    - Pearson correlation matrix")
 correlation_p = train.corr()  # Pearson method
-correlation_p.to_csv('stats/correlation_matrix_pearson.csv')
+correlation_p.to_csv('../feature_analysis/stats/correlation_matrix_pearson.csv')
 
 # print("    - Kendall Tau correlation matrix")
 # correlation_k = train.corr(method='kendall')    # Kendall Tau
@@ -46,15 +46,15 @@ correlation_p.to_csv('stats/correlation_matrix_pearson.csv')
 
 print("    - Spearman correlation matrix")
 correlation_s = train.corr(method='spearman')   # Spearman
-correlation_s.to_csv('stats/correlation_matrix_spearman.csv')
+correlation_s.to_csv('../feature_analysis/stats/correlation_matrix_spearman.csv')
 
 covariance = train.cov()
-covariance.to_csv('stats/covariance_matrix.csv')
+covariance.to_csv('../feature_analysis/stats/covariance_matrix.csv')
 
 # --- Plot matrices ---
 print("## Plotting")
 plt.matshow(correlation_p)
-plt.savefig('stats/correlation_matrix_pearson.png')
+plt.savefig('../feature_analysis/stats/correlation_matrix_pearson.png')
 plt.clf()
 
 # plt.matshow(correlation_k)
@@ -62,9 +62,9 @@ plt.clf()
 # plt.clf()
 
 plt.matshow(correlation_s)
-plt.savefig('stats/correlation_matrix_spearman.png')
+plt.savefig('../feature_analysis/stats/correlation_matrix_spearman.png')
 plt.clf()
 
 plt.matshow(covariance)
-plt.savefig('stats/covariance_matrix.png')
+plt.savefig('../feature_analysis/stats/covariance_matrix.png')
 plt.clf()
