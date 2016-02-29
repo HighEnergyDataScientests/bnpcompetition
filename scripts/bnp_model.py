@@ -33,7 +33,7 @@ enable_feature_analysis = 1
 id_col_name = "ID"
 num_iterations = 5
 save_limit = 0.455
-num_of_trial_comb = 10
+num_of_trial_comb = 20
 exhaustive_grid_search = 0
 
 
