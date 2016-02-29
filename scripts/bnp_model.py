@@ -20,6 +20,7 @@ import time
 import os
 import itertools
 import random
+import copy
 
 
 ## Finding columns with first element is less than value
@@ -31,8 +32,8 @@ test_col_name = "PredictedProb"
 enable_feature_analysis = 1
 id_col_name = "ID"
 num_iterations = 5
-save_limit = 0.46
-num_of_trial_comb = 3
+save_limit = 0.455
+num_of_trial_comb = 10
 exhaustive_grid_search = 0
 
 
@@ -52,11 +53,18 @@ def ceate_feature_map(features,featureMapFile):
         outfile.write('{0}\t{1}\tq\n'.format(i, feat))
     outfile.close()
     
+
+def pairwise(iterable):
+    "s -> (s0,s1), (s2,s3), (s4, s5), ..."
+    a = iter(iterable)
+    return itertools.izip(a, a)
+    
 def train_model(features,params,num_boost_round,test_size):
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     print "########################## Time Stamp ==== " + timestamp
     
     print("## Train a XGBoost model")
+    print("Features: ", features)
     timestr = time.strftime("%Y%m%d-%H%M%S")
     
     X_pos = train[train[output_col_name] == 1]
@@ -224,9 +232,6 @@ for f in cat_columns:
     train[str(f)+"_pct"].fillna(0.0,inplace=True)
     test[str(f)+"_pct"].fillna(0.0,inplace=True)
 
-    #print(train[str(f)+"_pct"])
-    #print(test[str(f)+"_pct"])
-
     lbl = preprocessing.LabelEncoder()
     lbl.fit(list(train[f].values) + list(test[f].values))
     train[f] = lbl.transform(list(train[f].values))
@@ -240,29 +245,10 @@ train["na_count"] = train.count(axis=1)
 test["na_count"] = test.count(axis=1)
 
 features = [s for s in train.columns.ravel().tolist() if s != output_col_name]
-print("Features: ", features)
 
 print("## Calculating Correlation")
 corr_features = features + [output_col_name]
 correlation_p = train[corr_features].corr()
-
-
-imp = Imputer(missing_values='NaN', strategy='mean', axis=0)
-imp.fit(train[features])
-train[features] = imp.transform(train[features])
-test[features] = imp.transform(test[features])
-
-print("## Creating Random features based on Correlation")
-output_cor = correlation_p[output_col_name].sort_values()
-
-most_neg_cor = list(output_cor.index[0:10].ravel())
-most_pos_cor = list(output_cor.index[-12:-2].ravel())
-
-print most_neg_cor
-print most_pos_cor
-
-exit()
-
 
 timestamp = time.strftime("%Y%m%d-%H%M%S")
 print("########################## Time Stamp ==== " + timestamp)
@@ -273,75 +259,85 @@ subsample_list          = [0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95]
 colsample_bytree_list   = [0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95]
 n_estimators_list       = [20, 40, 60, 90, 100, 120, 140]
 test_size_list          = [0.05]
+#imputer_st_list         = ['mean',"median","most_frequent"]
+imputer_st_list         = ['mean',"median"]
+num_of_feat_corr_list   = [2, 3, 4, 5, 6, 7, 8, 9, 10, 15]
+
 
 
 grid_search_file = "../predictions/grid_search_file.csv"
+grid_search_columns = ['eta','max_depth','subsample','colsample_bytree','n_estimators','test_size','imputer_strategy','num_of_feat_corr','result']
 
 if os.path.isfile(grid_search_file):
     grid_search_pd = pd.read_csv(grid_search_file)
+    grid_search_missing = list(set(grid_search_columns) - set(grid_search_pd.columns.ravel()))
+    print grid_search_missing
+    if len(grid_search_missing) > 0:
+        grid_search_pd = pd.concat([grid_search_pd,pd.DataFrame(columns=grid_search_missing)])
+        grid_search_pd['imputer_strategy'].fillna('mean',inplace=True)
+        grid_search_pd['num_of_feat_corr'].fillna(0,inplace=True)
 else:
-    columns = ['eta','max_depth','subsample','colsample_bytree','n_estimators','test_size','result']
-    grid_search_pd = pd.DataFrame(columns=columns)
+    grid_search_pd = pd.DataFrame(columns=grid_search_columns)
 
-combinations = list(itertools.product(eta_list,max_depth_list,subsample_list,colsample_bytree_list,n_estimators_list,test_size_list))
+combinations = list(itertools.product(eta_list,max_depth_list,subsample_list,colsample_bytree_list,n_estimators_list,test_size_list,imputer_st_list,num_of_feat_corr_list))
 
-if exhaustive_grid_search == 0:
-    random_sample_to_run = random.sample(combinations,num_of_trial_comb)
-    print("## Randomly picked parameters for running training : " + str(random_sample_to_run))
+# Removed Exhaustive Grid Search as it won't be used. Too many to run.
+random_sample_to_run = random.sample(combinations,num_of_trial_comb)
+print("## Randomly picked parameters for running training : " + str(random_sample_to_run))
 
-    for t_par in random_sample_to_run:
-        eta = t_par[0]
-        max_depth = t_par[1]
-        subsample = t_par[2]
-        colsample_bytree = t_par[3]
-        n_estimators = t_par[4]
-        test_size = t_par[5]
-        params = {"objective": "binary:logistic",
-                  "eta": eta,                                              
-                  "nthread":3,                                             
-                  "max_depth": max_depth,                                  
-                  "subsample": subsample,                                  
-                  "colsample_bytree": colsample_bytree,                    
-                  "eval_metric": "logloss",                                
-                  "n_estimators": n_estimators,                            
-                  "silent": 1                                              
-                  }                                                        
-        num_boost_round = 10000
-        test_size = test_size
-        best_score = train_model(features,params,num_boost_round,test_size)
-        grid_search_pd.loc[len(grid_search_pd)] = [eta,max_depth,subsample,colsample_bytree,n_estimators,test_size,best_score]
-
-        timestamp = time.strftime("%Y%m%d-%H%M%S")
-        print "########################## Round Time Stamp ==== " + timestamp
-
-        grid_search_pd.to_csv(grid_search_file, index=False)
-else:
-    for t_par in combinations:
-        eta = t_par[0]
-        max_depth = t_par[1]
-        subsample = t_par[2]
-        colsample_bytree = t_par[3]
-        n_estimators = t_par[4]
-        test_size = t_par[5]
-        params = {"objective": "binary:logistic",
-                  "eta": eta,                                              
-                  "nthread":3,                                             
-                  "max_depth": max_depth,                                  
-                  "subsample": subsample,                                  
-                  "colsample_bytree": colsample_bytree,                    
-                  "eval_metric": "logloss",                                
-                  "n_estimators": n_estimators,                            
-                  "silent": 1                                              
-                  }                                                        
-        num_boost_round = 10000
-        test_size = test_size
-        best_score = train_model(features,params,num_boost_round,test_size)
-        grid_search_pd.loc[len(grid_search_pd)] = [eta,max_depth,subsample,colsample_bytree,n_estimators,test_size,best_score]
-
-        timestamp = time.strftime("%Y%m%d-%H%M%S")
-        print "########################## Round Time Stamp ==== " + timestamp
-
-        grid_search_pd.to_csv(grid_search_file, index=False)
+for t_par in random_sample_to_run:
+    eta                 = t_par[0]
+    max_depth           = t_par[1]
+    subsample           = t_par[2]
+    colsample_bytree    = t_par[3]
+    n_estimators        = t_par[4]
+    test_size           = t_par[5]
+    imp_start           = t_par[6]
+    num_of_feat_corr    = t_par[7]
 
 
+    print("## Filling missing data")
+    imp = Imputer(missing_values='NaN', strategy=imp_start, axis=0)
+    imp.fit(train[features])
+    train[features] = imp.transform(train[features])
+    test[features] = imp.transform(test[features])
+    
+    curr_features = copy.deepcopy(features)
+
+    print("## Creating Random features based on Correlation")
+    output_cor = correlation_p[output_col_name].sort_values()
+
+    most_neg_cor = list(output_cor.index[0:num_of_feat_corr].ravel())
+    most_pos_cor = list(output_cor.index[(-2-num_of_feat_corr):-2].ravel())
+
+    for f1, f2 in pairwise(most_neg_cor):
+        train[f1 + "_" + f2] = train[f1] + train[f2]
+        test[f1 + "_" + f2] = test[f1] + test[f2]
+        curr_features += [f1 + "_" + f2]
+
+    for f1, f2 in pairwise(most_pos_cor):
+        train[f1 + "_" + f2] = train[f1] + train[f2]
+        test[f1 + "_" + f2] = test[f1] + test[f2]
+        curr_features += [f1 + "_" + f2]
+
+
+    params = {"objective": "binary:logistic",
+              "eta": eta,                                              
+              "nthread":3,                                             
+              "max_depth": max_depth,                                  
+              "subsample": subsample,                                  
+              "colsample_bytree": colsample_bytree,                    
+              "eval_metric": "logloss",                                
+              "n_estimators": n_estimators,                            
+              "silent": 1                                              
+              }                                                        
+    num_boost_round = 10000
+    test_size = test_size
+    best_score = train_model(curr_features,params,num_boost_round,test_size)
+    grid_search_pd.loc[len(grid_search_pd),grid_search_columns] = [eta,max_depth,subsample,colsample_bytree,n_estimators,test_size,imp_start,num_of_feat_corr,best_score]
+
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    print("########################## Round Time Stamp ==== " + timestamp)
+
+    grid_search_pd.to_csv(grid_search_file, index=False)
 
