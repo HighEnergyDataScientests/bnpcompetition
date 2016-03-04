@@ -34,7 +34,9 @@ id_col_name = "ID"
 num_iterations = 5
 save_limit = 0.455
 num_of_trial_comb = 20
+missing_data_corr_cut_off = 0.02
 exhaustive_grid_search = 0
+do_bayesian_features = 1
 
 
 ### Creating output folders
@@ -177,7 +179,6 @@ def analyze_data(drop_columns):
 #    print col_nan_count_test[col_nan_count_test != 0]
 
 
-
 timestamp = time.strftime("%Y%m%d-%H%M%S")
 print("########################## Start Time Stamp ==== " + timestamp)
 print("## Loading Data")
@@ -191,11 +192,6 @@ if os.path.isfile(models_predictions_file):
 else:
     models_predictions = pd.DataFrame()
  
-timestamp = time.strftime("%Y%m%d-%H%M%S")
-print("########################## Time Stamp ==== " + timestamp)
-print("## Data Processing")
-train = train.drop(id_col_name, axis=1)
-
 #train = train.fillna(-1)
 #test = test.fillna(-1)
 
@@ -215,27 +211,28 @@ print("## Data Encoding")
 cat_columns = list(train.select_dtypes(include=['object']).columns)
 print("Categorical Features : " + str(cat_columns))
 
-for f in cat_columns:
-    print(f)
+if do_bayesian_features == 1:
+    for f in cat_columns:
+        print(f)
 
-    # Get the counts of the categories for both pos/neg series
-    feat_counts_df = pd.DataFrame(train[f].value_counts(normalize=True))
-    #print feat_counts_df
-    
-    feat_counts_df.fillna(0,inplace=True)
+        # Get the counts of the categories for both pos/neg series
+        feat_counts_df = pd.DataFrame(train[f].value_counts(normalize=True))
+        #print feat_counts_df
 
-    for v in pd.unique(train[f]):
-        if not pd.isnull(v):
-            train.loc[(train[f] == v), str(f)+"_pct"] = feat_counts_df.loc[v,f]
-            test.loc[(test[f] == v), str(f)+"_pct"] = feat_counts_df.loc[v,f]
+        feat_counts_df.fillna(0,inplace=True)
 
-    train[str(f)+"_pct"].fillna(0.0,inplace=True)
-    test[str(f)+"_pct"].fillna(0.0,inplace=True)
+        for v in pd.unique(train[f]):
+            if not pd.isnull(v):
+                train.loc[(train[f] == v), str(f)+"_pct"] = feat_counts_df.loc[v,f]
+                test.loc[(test[f] == v), str(f)+"_pct"] = feat_counts_df.loc[v,f]
 
-    lbl = preprocessing.LabelEncoder()
-    lbl.fit(list(train[f].values) + list(test[f].values))
-    train[f] = lbl.transform(list(train[f].values))
-    test[f] = lbl.transform(list(test[f].values))
+        train[str(f)+"_pct"].fillna(0.0,inplace=True)
+        test[str(f)+"_pct"].fillna(0.0,inplace=True)
+
+        lbl = preprocessing.LabelEncoder()
+        lbl.fit(list(train[f].values) + list(test[f].values))
+        train[f] = lbl.transform(list(train[f].values))
+        test[f] = lbl.transform(list(test[f].values))
 
 
 drop_columns = ["ID","target"]
@@ -244,11 +241,42 @@ analyze_data(drop_columns)
 train["na_count"] = train.count(axis=1)
 test["na_count"] = test.count(axis=1)
 
+print("## Calculating Correlation")
+correlation_p = train.corr()
+train_av = train.isnull().astype(int)
+train_av['target'] = train['target']
+train_av['ID'] = train['ID']
+test_av = test.isnull().astype(int)
+test_av["ID"] = test["ID"]
+train_av_corr = train_av.corr()
+target_corr_missing = train_av_corr["target"].fillna(0).sort_values()
+target_corr_missing_most_neg = list(target_corr_missing[target_corr_missing < -missing_data_corr_cut_off].index.ravel())
+target_corr_missing_most_pos = list(set(list(target_corr_missing[target_corr_missing >  missing_data_corr_cut_off].index.ravel())) - set(["target"]))
+added_missing_features = target_corr_missing_most_neg + target_corr_missing_most_pos
+missing_features_new_names = [t + "_available" for t in added_missing_features]
+#print missing_features_new_names
+rename_dict = dict(zip(added_missing_features, missing_features_new_names))
+#print rename_dict
+train_av.rename(columns=rename_dict,inplace=True)
+test_av.rename(columns=rename_dict,inplace=True)
+#print train_av.columns.ravel()
+missing_features_new_names.append("ID")
+#print missing_features_new_names
+#print train_av[missing_features_new_names]
+train = pd.merge(train,train_av[missing_features_new_names],on="ID")
+test = pd.merge(test,test_av[missing_features_new_names],on="ID")
+print train.columns.ravel()
+print test.columns.ravel()
+#exit()
+
+
+timestamp = time.strftime("%Y%m%d-%H%M%S")
+print("########################## Time Stamp ==== " + timestamp)
+print("## Data Processing")
+train = train.drop(id_col_name, axis=1)
+
 features = [s for s in train.columns.ravel().tolist() if s != output_col_name]
 
-print("## Calculating Correlation")
-corr_features = features + [output_col_name]
-correlation_p = train[corr_features].corr()
 
 timestamp = time.strftime("%Y%m%d-%H%M%S")
 print("########################## Time Stamp ==== " + timestamp)
@@ -283,7 +311,10 @@ combinations = list(itertools.product(eta_list,max_depth_list,subsample_list,col
 
 # Removed Exhaustive Grid Search as it won't be used. Too many to run.
 random_sample_to_run = random.sample(combinations,num_of_trial_comb)
+random_sample_to_run = [[0.015,10,0.75,0.850000,150,0.1,"median",10]]
 print("## Randomly picked parameters for running training : " + str(random_sample_to_run))
+
+
 
 for t_par in random_sample_to_run:
     eta                 = t_par[0]
